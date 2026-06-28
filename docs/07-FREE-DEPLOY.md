@@ -16,6 +16,21 @@ Stack gratuito recomendado:
 
 ## Automatización (recomendado)
 
+### Paso A — Obtener tokens Turso (Windows, 1 min)
+
+Script que abre Turso, pide **un solo** Platform Token y genera todo automáticamente:
+
+```powershell
+npm run setup:tokens
+# o: py -3 scripts/get_tokens.py
+```
+
+**Qué hace:** abre https://turso.tech/app/settings/tokens, pide `TURSO_PLATFORM_TOKEN`, obtiene la URL de la BD desde la API, crea `TURSO_AUTH_TOKEN`, genera `ENCRYPTION_KEY` + `SETUP_SECRET`, y guarda todo en `.env.local`.
+
+La próxima vez reutiliza `TURSO_PLATFORM_TOKEN` guardado — no vuelve a pedirlo.
+
+### Paso B — Deploy completo a Vercel
+
 Script Python que conecta Turso + Vercel, sube variables de entorno, despliega a producción y verifica endpoints:
 
 ```powershell
@@ -35,11 +50,20 @@ python scripts/auto_deploy.py --skip-deploy
 
 # Pasar token Turso manualmente:
 python scripts/auto_deploy.py --token eyJhbG...
+
+# Windows sin CLI Turso: Platform API (Turso → Settings → API Tokens)
+# Añade a .env.local: TURSO_PLATFORM_TOKEN=... y opcional TURSO_ORG=empresario-virtual
+python scripts/auto_deploy.py --non-interactive
+
+# O pasar platform token directamente:
+python scripts/auto_deploy.py --platform-token tso_... --non-interactive
 ```
 
-**Qué automatiza:** genera `ENCRYPTION_KEY` y `SETUP_SECRET`, actualiza `.env.local`, crea token Turso (si `turso` CLI está logueada), sube env vars a Vercel, `vercel deploy --prod`, llama `/api/setup`, `/api/health` y `/api/daily-close`.
+**Qué automatiza:** genera secrets locales, obtiene URL + token Turso vía **Platform API** (ideal Windows), sube env vars a Vercel vía `npx vercel`, `vercel deploy --prod`, llama `/api/setup`, `/api/health` y `/api/daily-close`.
 
-**Manual si falta algo:** token Turso si no tienes `turso auth login`, credenciales Google OAuth, y `vercel login` la primera vez.
+**Manual una sola vez:** crear `TURSO_PLATFORM_TOKEN` en Turso (el script abre la página). También: Google OAuth y `vercel login`.
+
+> **Windows:** la CLI Turso ya no publica binario Windows; usa Platform API o `--token`.
 
 ---
 

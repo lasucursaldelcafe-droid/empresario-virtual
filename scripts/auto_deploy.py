@@ -22,13 +22,19 @@ import urllib.request
 from pathlib import Path
 from typing import Iterable
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from turso_client import (  # noqa: E402
+    DEFAULT_DB_NAME,
+    DEFAULT_TURSO_ORG,
+    DEFAULT_TURSO_URL,
+    TursoApiError,
+    fetch_turso_credentials,
+    resolve_org_slug,
+    resolve_platform_token,
+)
+
 ROOT = Path(__file__).resolve().parent.parent
 ENV_LOCAL = ROOT / ".env.local"
-DEFAULT_TURSO_URL = (
-    "libsql://empresario-virtual-empresario-virtual.aws-us-east-2.turso.io"
-)
-DEFAULT_DB_NAME = "empresario-virtual"
-
 # Variables mínimas para producción (Turso + seguridad)
 CORE_ENV_KEYS = (
     "TURSO_DATABASE_URL",
@@ -55,6 +61,19 @@ VERCEL_ENV_TARGETS = ("production", "preview", "development")
 def log(msg: str, *, level: str = "info") -> None:
     prefix = {"info": ">", "ok": "+", "warn": "!", "err": "x"}.get(level, ">")
     print(f"{prefix} {msg}")
+
+
+def resolve_vercel_cmd() -> list[str]:
+    if shutil.which("vercel"):
+        return ["vercel"]
+    return ["npx", "vercel"]
+
+
+def resolve_turso_cmd() -> list[str] | None:
+    turso = shutil.which("turso")
+    if turso:
+        return [turso]
+    return None
 
 
 def run_cmd(
@@ -174,25 +193,102 @@ def ensure_secrets(env: dict[str, str], *, dry_run: bool) -> dict[str, str]:
     return env
 
 
-def extract_db_name(_turso_url: str) -> str:
-    """Nombre de BD Turso para la CLI (proyecto fijo)."""
-    return DEFAULT_DB_NAME
+def resolve_turso_credentials(
+    env: dict[str, str],
+    turso_url: str,
+    token_arg: str | None,
+    platform_token_arg: str | None,
+    org_arg: str | None,
+    db_name: str,
+    *,
+    dry_run: bool,
+    non_interactive: bool,
+) -> dict[str, str]:
+    if dry_run:
+        return {
+            "TURSO_DATABASE_URL": turso_url,
+            "TURSO_AUTH_TOKEN": token_arg or env.get("TURSO_AUTH_TOKEN") or "dry-run-token",
+        }
+
+    if token_arg:
+        return {"TURSO_DATABASE_URL": turso_url, "TURSO_AUTH_TOKEN": token_arg.strip()}
+
+    existing_token = env.get("TURSO_AUTH_TOKEN", "").strip()
+    existing_url = env.get("TURSO_DATABASE_URL", "").strip() or turso_url
+    if existing_token:
+        log("Usando TURSO_AUTH_TOKEN existente en .env.local")
+        return {"TURSO_DATABASE_URL": existing_url, "TURSO_AUTH_TOKEN": existing_token}
+
+    platform_token: str | None = None
+    try:
+        platform_token = resolve_platform_token(
+            env,
+            platform_token_arg,
+            prompt=False,
+            open_browser=False,
+        )
+    except SystemExit:
+        platform_token = None
+
+    if not platform_token and not non_interactive:
+        log("Obteniendo TURSO_PLATFORM_TOKEN (una sola vez)...")
+        platform_token = resolve_platform_token(
+            env,
+            platform_token_arg,
+            prompt=True,
+            open_browser=True,
+        )
+
+    if platform_token:
+        org_slug = resolve_org_slug(env, org_arg, platform_token)
+        try:
+            creds = fetch_turso_credentials(
+                platform_token=platform_token,
+                org_slug=org_slug,
+                db_name=db_name,
+            )
+            log("Turso: URL + auth token vía Platform API", level="ok")
+            return creds
+        except TursoApiError as exc:
+            log(str(exc), level="warn")
+
+    created = create_turso_token_cli(db_name, dry_run=False)
+    if created:
+        return {"TURSO_DATABASE_URL": turso_url, "TURSO_AUTH_TOKEN": created}
+
+    if non_interactive:
+        raise SystemExit(
+            "TURSO_AUTH_TOKEN requerido. Opciones:\n"
+            "  1) py -3 scripts/get_tokens.py\n"
+            "  2) py -3 scripts/auto_deploy.py --platform-token tso_...\n"
+            "  3) py -3 scripts/auto_deploy.py --token <jwt>"
+        )
+
+    log("Pega TURSO_AUTH_TOKEN (Dashboard → Database → Create Token):", level="warn")
+    pasted = input("TURSO_AUTH_TOKEN: ").strip()
+    if not pasted:
+        raise SystemExit("TURSO_AUTH_TOKEN requerido para continuar.")
+    return {"TURSO_DATABASE_URL": turso_url, "TURSO_AUTH_TOKEN": pasted}
 
 
-def create_turso_token(db_name: str, *, dry_run: bool) -> str | None:
-    turso = shutil.which("turso")
-    if not turso:
-        log("CLI 'turso' no encontrada — instala: irm get.tur.so/install.ps1 | iex", level="warn")
+def create_turso_token_cli(db_name: str, *, dry_run: bool) -> str | None:
+    turso_cmd = resolve_turso_cmd()
+    if not turso_cmd:
+        log(
+            "CLI 'turso' no disponible (sin binario Windows en releases recientes). "
+            "Usa TURSO_PLATFORM_TOKEN o scripts/get_tokens.py",
+            level="warn",
+        )
         return None
 
     if dry_run:
         log(f"[dry-run] turso db tokens create {db_name}", level="info")
         return "dry-run-token"
 
-    result = run_cmd([turso, "db", "tokens", "create", db_name], check=False)
+    result = run_cmd([*turso_cmd, "db", "tokens", "create", db_name], check=False)
     output = (result.stdout or result.stderr or "").strip()
     if result.returncode != 0:
-        log(f"No se pudo crear token Turso: {output}", level="warn")
+        log(f"No se pudo crear token Turso (CLI): {output}", level="warn")
         return None
 
     token = output.splitlines()[-1].strip()
@@ -204,41 +300,14 @@ def create_turso_token(db_name: str, *, dry_run: bool) -> str | None:
     return None
 
 
-def resolve_turso_token(
-    env: dict[str, str],
-    turso_url: str,
-    token_arg: str | None,
-    *,
-    dry_run: bool,
-) -> str:
-    if token_arg:
-        return token_arg.strip()
-
-    existing = env.get("TURSO_AUTH_TOKEN", "").strip()
-    if existing:
-        log("Usando TURSO_AUTH_TOKEN existente en .env.local")
-        return existing
-
-    db_name = extract_db_name(turso_url)
-    created = create_turso_token(db_name, dry_run=dry_run)
-    if created:
-        return created
-
-    log("Pega el token de Turso (turso db tokens create empresario-virtual):", level="warn")
-    pasted = input("TURSO_AUTH_TOKEN: ").strip()
-    if not pasted:
-        raise SystemExit("TURSO_AUTH_TOKEN requerido para continuar.")
-    return pasted
-
-
 def vercel_available() -> bool:
-    return shutil.which("vercel") is not None
+    return shutil.which("vercel") is not None or shutil.which("npx") is not None
 
 
 def vercel_env_exists(name: str, target: str, *, dry_run: bool) -> bool:
     if dry_run:
         return False
-    result = run_cmd(["vercel", "env", "ls", target], check=False)
+    result = run_cmd([*resolve_vercel_cmd(), "env", "ls", target], check=False)
     output = result.stdout or ""
     return re.search(rf"^\s*{re.escape(name)}\s", output, re.MULTILINE) is not None
 
@@ -249,9 +318,9 @@ def vercel_env_set(name: str, value: str, targets: Iterable[str], *, dry_run: bo
             if dry_run:
                 log(f"[dry-run] vercel env rm {name} {target} -y", level="info")
             else:
-                run_cmd(["vercel", "env", "rm", name, target, "-y"], check=False)
+                run_cmd([*resolve_vercel_cmd(), "env", "rm", name, target, "-y"], check=False)
         run_cmd(
-            ["vercel", "env", "add", name, target],
+            [*resolve_vercel_cmd(), "env", "add", name, target],
             input_text=value + "\n",
             dry_run=dry_run,
         )
@@ -261,7 +330,8 @@ def vercel_env_set(name: str, value: str, targets: Iterable[str], *, dry_run: bo
 def push_env_to_vercel(env: dict[str, str], *, dry_run: bool) -> None:
     if not vercel_available() and not dry_run:
         raise SystemExit(
-            "CLI 'vercel' no encontrada. Instala: npm i -g vercel && vercel login"
+            "CLI 'vercel' no encontrada. Instala: npm i -g vercel && vercel login "
+            "(o usa npx vercel tras npm install)"
         )
     if not vercel_available():
         log("CLI 'vercel' no encontrada (dry-run continua)", level="warn")
@@ -282,7 +352,7 @@ def deploy_production(*, dry_run: bool) -> str:
         log("[dry-run] vercel deploy --prod --yes", level="info")
         return "https://empresario-virtual.vercel.app"
 
-    result = run_cmd(["vercel", "deploy", "--prod", "--yes"])
+    result = run_cmd([*resolve_vercel_cmd(), "deploy", "--prod", "--yes"])
     output = (result.stdout or "") + (result.stderr or "")
     urls = re.findall(r"https://[^\s\]]+\.vercel\.app", output)
     if urls:
@@ -290,7 +360,7 @@ def deploy_production(*, dry_run: bool) -> str:
         log(f"Deploy OK: {url}", level="ok")
         return url
 
-    inspect = run_cmd(["vercel", "inspect", "--prod"], check=False)
+    inspect = run_cmd([*resolve_vercel_cmd(), "inspect", "--prod"], check=False)
     inspect_out = inspect.stdout or inspect.stderr or ""
     urls = re.findall(r"https://[^\s\]]+\.vercel\.app", inspect_out)
     if urls:
@@ -383,7 +453,26 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--token",
-        help="TURSO_AUTH_TOKEN (evita prompt/CLI turso)",
+        help="TURSO_AUTH_TOKEN (evita prompt/CLI/API turso)",
+    )
+    parser.add_argument(
+        "--platform-token",
+        help="TURSO_PLATFORM_TOKEN para crear TURSO_AUTH_TOKEN vía Platform API",
+    )
+    parser.add_argument(
+        "--turso-org",
+        default=DEFAULT_TURSO_ORG,
+        help=f"Slug de organización Turso (default: {DEFAULT_TURSO_ORG})",
+    )
+    parser.add_argument(
+        "--db-name",
+        default=DEFAULT_DB_NAME,
+        help=f"Nombre BD Turso (default: {DEFAULT_DB_NAME})",
+    )
+    parser.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="No pedir token por stdin si falta (falla con mensaje claro)",
     )
     parser.add_argument(
         "--skip-deploy",
@@ -413,24 +502,24 @@ def main() -> int:
     env = parse_env_file(ENV_LOCAL)
     env = ensure_secrets(env, dry_run=args.dry_run)
 
-    turso_updates = {"TURSO_DATABASE_URL": args.turso_url}
-    write_env_updates(turso_updates, dry_run=args.dry_run)
-    env.update(turso_updates)
-
-    token = resolve_turso_token(
+    turso_creds = resolve_turso_credentials(
         env,
         args.turso_url,
         args.token,
+        args.platform_token,
+        args.turso_org,
+        args.db_name,
         dry_run=args.dry_run,
+        non_interactive=args.non_interactive,
     )
-    write_env_updates({"TURSO_AUTH_TOKEN": token}, dry_run=args.dry_run)
-    env["TURSO_AUTH_TOKEN"] = token
+    write_env_updates(turso_creds, dry_run=args.dry_run)
+    env.update(turso_creds)
 
     env = parse_env_file(ENV_LOCAL) if not args.dry_run else env
     if args.dry_run:
         env.setdefault("ENCRYPTION_KEY", "dry-run-key")
         env.setdefault("SETUP_SECRET", "dry-run-secret")
-        env["TURSO_AUTH_TOKEN"] = token
+        env.update(turso_creds)
 
     push_env_to_vercel(env, dry_run=args.dry_run)
 
