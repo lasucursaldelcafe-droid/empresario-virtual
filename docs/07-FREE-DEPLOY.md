@@ -100,11 +100,14 @@ Para emulador Android Studio: `npm run android`
 
 ---
 
-## URLs útiles tras deploy
+## URLs en producción (ya desplegado)
 
-- Web: `https://TU-PROYECTO.vercel.app`
-- Dashboard: `https://TU-PROYECTO.vercel.app/dashboard`
-- Health: `https://TU-PROYECTO.vercel.app/api/health`
+- **Web:** https://empresario-virtual.vercel.app
+- **Dashboard:** https://empresario-virtual.vercel.app/dashboard
+- **Health:** https://empresario-virtual.vercel.app/api/health
+- **Vercel dashboard:** https://vercel.com/lasucursaldelcafe-droids-projects/empresario-virtual
+
+> Falta conectar Turso (BD) y variables de entorno para que la API funcione.
 
 ---
 
