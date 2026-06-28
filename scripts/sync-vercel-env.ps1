@@ -15,6 +15,9 @@ function Get-EnvValue([string]$Name) {
 $vars = @(
   "TURSO_DATABASE_URL",
   "NEXT_PUBLIC_APP_URL",
+  "MAIN_EMAIL",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
   "GOOGLE_REDIRECT_URI",
   "ENCRYPTION_KEY",
   "SETUP_SECRET"

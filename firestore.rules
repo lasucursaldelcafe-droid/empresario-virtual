@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Firestore es opcional/suplementario. Turso (libSQL) sigue siendo la BD principal.
+// Cuando migres datos y configures Firebase Auth, reemplaza estas reglas con acceso autenticado.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

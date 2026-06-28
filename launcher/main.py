@@ -33,6 +33,7 @@ from launcher.env_utils import (  # noqa: E402
     update_env_keys,
 )
 from launcher.health_checks import (  # noqa: E402
+    check_google_oauth_env,
     check_turso_connection,
     check_vercel_has_turso_token,
     check_vercel_health,
@@ -79,10 +80,13 @@ class LauncherApp:
         self.var_turso_url = StringVar(value=env.get("TURSO_DATABASE_URL", DEFAULT_TURSO_URL))
         self.var_turso_token = StringVar(value=env.get("TURSO_AUTH_TOKEN", ""))
         self.var_main_email = StringVar(value=env.get("MAIN_EMAIL", ""))
+        self.var_google_client_id = StringVar(value=env.get("GOOGLE_CLIENT_ID", ""))
+        self.var_google_client_secret = StringVar(value=env.get("GOOGLE_CLIENT_SECRET", ""))
 
         self.status_vercel = StringVar(value="Sin comprobar")
         self.status_turso = StringVar(value="Sin comprobar")
         self.status_vercel_env = StringVar(value="Sin comprobar")
+        self.status_google_oauth = StringVar(value="Sin comprobar")
 
         self._build_ui()
         self._load_env_into_form()
@@ -126,6 +130,8 @@ class LauncherApp:
         self._row(env_frame, "TURSO_DATABASE_URL", self.var_turso_url, show=None)
         self._row(env_frame, "TURSO_AUTH_TOKEN", self.var_turso_token, show="*")
         self._row(env_frame, "MAIN_EMAIL", self.var_main_email, show=None)
+        self._row(env_frame, "GOOGLE_CLIENT_ID", self.var_google_client_id, show=None)
+        self._row(env_frame, "GOOGLE_CLIENT_SECRET", self.var_google_client_secret, show="*")
 
         btn_row = Frame(env_frame)
         btn_row.pack(fill=X, pady=(8, 0))
@@ -155,6 +161,17 @@ class LauncherApp:
             Button(left, text=label, width=28, command=cmd).pack(fill=X, pady=3)
 
         ttk.Separator(left, orient="horizontal").pack(fill=X, pady=8)
+        Label(left, text="Google / Firebase", font=("Segoe UI", 9, "bold")).pack(anchor="w")
+
+        google_actions = [
+            ("Configurar Google OAuth", self.run_setup_google_oauth),
+            ("Setup Firebase", self.run_setup_firebase),
+            ("Deploy Firebase rules", self.run_deploy_firebase),
+        ]
+        for label, cmd in google_actions:
+            Button(left, text=label, width=28, command=cmd).pack(fill=X, pady=2)
+
+        ttk.Separator(left, orient="horizontal").pack(fill=X, pady=8)
         Label(left, text="Abrir URLs", font=("Segoe UI", 9, "bold")).pack(anchor="w")
 
         urls = [
@@ -179,6 +196,7 @@ class LauncherApp:
         self.lbl_vercel = self._status_row(status_frame, "Vercel health", self.status_vercel)
         self.lbl_turso = self._status_row(status_frame, "Turso DB", self.status_turso)
         self.lbl_vercel_env = self._status_row(status_frame, "Token en Vercel", self.status_vercel_env)
+        self.lbl_google_oauth = self._status_row(status_frame, "Google OAuth", self.status_google_oauth)
         Button(status_frame, text="Actualizar estado", command=self.refresh_status).pack(anchor="e", pady=(6, 0))
 
         log_frame = ttk.LabelFrame(right, text="Log", padding=8)
@@ -213,6 +231,8 @@ class LauncherApp:
         self.var_turso_url.set(env.get("TURSO_DATABASE_URL", DEFAULT_TURSO_URL))
         self.var_turso_token.set(env.get("TURSO_AUTH_TOKEN", ""))
         self.var_main_email.set(env.get("MAIN_EMAIL", ""))
+        self.var_google_client_id.set(env.get("GOOGLE_CLIENT_ID", ""))
+        self.var_google_client_secret.set(env.get("GOOGLE_CLIENT_SECRET", ""))
 
     def log(self, message: str) -> None:
         self.log_queue.put(("log", message))
@@ -243,6 +263,7 @@ class LauncherApp:
             "vercel": (self.status_vercel, self.lbl_vercel),
             "turso": (self.status_turso, self.lbl_turso),
             "vercel_env": (self.status_vercel_env, self.lbl_vercel_env),
+            "google_oauth": (self.status_google_oauth, self.lbl_google_oauth),
         }
         for key, (var, lbl) in mapping.items():
             item = data.get(key)
@@ -272,10 +293,13 @@ class LauncherApp:
             "TURSO_DATABASE_URL": self.var_turso_url.get().strip(),
             "TURSO_AUTH_TOKEN": self.var_turso_token.get().strip(),
             "MAIN_EMAIL": self.var_main_email.get().strip(),
+            "GOOGLE_CLIENT_ID": self.var_google_client_id.get().strip(),
+            "GOOGLE_CLIENT_SECRET": self.var_google_client_secret.get().strip(),
         }
         update_env_keys(updates)
         self.log("Guardado .env.local")
         self.log(f"  TURSO_AUTH_TOKEN: {mask_secret(updates['TURSO_AUTH_TOKEN'])}")
+        self.log(f"  GOOGLE_CLIENT_SECRET: {mask_secret(updates['GOOGLE_CLIENT_SECRET'])}")
         messagebox.showinfo("Guardado", "Variables guardadas en .env.local")
         self.refresh_status()
 
@@ -370,6 +394,26 @@ class LauncherApp:
             self._stream_process([resolve_npm(), "start"], cwd=mobile_dir)
         self._run_async("Mobile Expo", worker)
 
+    def run_setup_google_oauth(self) -> None:
+        def worker() -> None:
+            py = resolve_python()
+            self._stream_process([*py, "scripts/setup_google_oauth.py"])
+            self._load_env_into_form()
+            self.log_queue.put(("status", self._collect_status()))
+        self._run_async("Configurar Google OAuth", worker)
+
+    def run_setup_firebase(self) -> None:
+        def worker() -> None:
+            py = resolve_python()
+            self._stream_process([*py, "scripts/setup_firebase.py"])
+        self._run_async("Setup Firebase", worker)
+
+    def run_deploy_firebase(self) -> None:
+        def worker() -> None:
+            py = resolve_python()
+            self._stream_process([*py, "scripts/setup_firebase.py", "--deploy-rules"])
+        self._run_async("Deploy Firebase rules", worker)
+
     def run_turso_guided_flow(self) -> None:
         if not self.var_turso_token.get().strip():
             messagebox.showerror(
@@ -391,6 +435,8 @@ class LauncherApp:
                     "TURSO_DATABASE_URL": self.var_turso_url.get().strip(),
                     "TURSO_AUTH_TOKEN": self.var_turso_token.get().strip(),
                     "MAIN_EMAIL": self.var_main_email.get().strip(),
+                    "GOOGLE_CLIENT_ID": self.var_google_client_id.get().strip(),
+                    "GOOGLE_CLIENT_SECRET": self.var_google_client_secret.get().strip(),
                 }
             )
             self.log("Paso 2/3: sync Vercel")
@@ -417,10 +463,12 @@ class LauncherApp:
             env.get("TURSO_AUTH_TOKEN"),
         )
         vercel_env = check_vercel_has_turso_token()
+        google_oauth = check_google_oauth_env(env)
         return {
             "vercel": {"ok": vercel.ok, "detail": vercel.detail},
             "turso": {"ok": turso.ok, "detail": turso.detail},
             "vercel_env": {"ok": vercel_env.ok, "detail": vercel_env.detail},
+            "google_oauth": {"ok": google_oauth.ok, "detail": google_oauth.detail},
         }
 
     def refresh_status(self) -> None:

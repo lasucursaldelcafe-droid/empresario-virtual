@@ -91,21 +91,23 @@ def check_turso_connection(
         return CheckResult(False, "Turso DB", str(exc.reason or exc))
 
 
+def check_google_oauth_env(env: dict[str, str] | None = None) -> CheckResult:
+    data = env or parse_env_file()
+    missing = [
+        key
+        for key in ("MAIN_EMAIL", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "GOOGLE_REDIRECT_URI")
+        if not data.get(key, "").strip()
+    ]
+    if missing:
+        return CheckResult(
+            False,
+            "Google OAuth",
+            f"Faltan en .env.local: {', '.join(missing)}",
+        )
+    return CheckResult(True, "Google OAuth", "Credenciales OAuth presentes en .env.local")
+
+
 def check_vercel_has_turso_token() -> CheckResult:
-    if not shutil.which("vercel") and not shutil.which("npx"):
-        return CheckResult(False, "Vercel env", "CLI vercel/npx no disponible")
-
-    try:
-        has_token = turso_token_on_vercel()
-    except Exception as exc:  # noqa: BLE001
-        return CheckResult(False, "Vercel env", f"No se pudo consultar: {exc}")
-
-    if has_token:
-        return CheckResult(True, "Vercel env", "TURSO_AUTH_TOKEN presente en production")
-    return CheckResult(False, "Vercel env", "TURSO_AUTH_TOKEN ausente en Vercel production")
-
-
-def run_all_checks() -> list[CheckResult]:
     env = parse_env_file()
     base = get_production_url(env)
     return [
@@ -115,4 +117,5 @@ def run_all_checks() -> list[CheckResult]:
             env.get("TURSO_AUTH_TOKEN"),
         ),
         check_vercel_has_turso_token(),
+        check_google_oauth_env(),
     ]

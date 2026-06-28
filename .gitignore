@@ -52,3 +52,9 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

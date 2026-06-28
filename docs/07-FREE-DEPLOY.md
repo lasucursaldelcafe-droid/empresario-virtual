@@ -8,6 +8,7 @@ Stack gratuito recomendado:
 | **Vercel** | Hobby | $0 | Hosting Next.js |
 | **Turso** | Free | $0 | Base de datos (5 GB) |
 | **Google Cloud** | Free | $0 | OAuth Gmail |
+| **Firebase** | Spark | $0 | Auth/Firestore opcional (reglas) |
 | **Expo Go** | Free | $0 | Probar Android en el teléfono |
 
 > Vercel Hobby es para proyectos personales/no comerciales. Turso free: 100 DBs, 5 GB, sin tarjeta.
@@ -123,15 +124,30 @@ Deberías ver: `{"ok":true,"message":"Base de datos inicializada..."}`
 
 ---
 
-## Paso 4 — Google OAuth (gratis)
+## Paso 4 — Google OAuth + Firebase (gratis)
+
+**Automatizado:**
+
+```bash
+npm run setup:google-oauth   # abre Google Cloud Console + valida .env.local
+npm run setup:firebase       # login Firebase (navegador, una vez) + valida config
+npm run deploy:firebase      # publica firestore.rules (deny-all por defecto)
+```
+
+Guía completa: `scripts/setup-google-cloud.md`
 
 1. https://console.cloud.google.com → proyecto `empresario-virtual`
 2. APIs: Gmail API + Google Drive API
-3. Credenciales OAuth → redirect de producción:
+3. Credenciales OAuth → redirects:
    ```
-   https://TU-PROYECTO.vercel.app/api/oauth/google/callback
+   http://localhost:3000/api/oauth/google/callback
+   https://empresario-virtual.vercel.app/api/oauth/google/callback
    ```
-4. En la app: `/settings/integrations` → Conectar Google
+4. `MAIN_EMAIL=lasucursaldelcafe@gmail.com` en `.env.local`
+5. Sync Vercel: `python launcher/sync_vercel.py`
+6. En la app: `/settings/integrations` → Conectar Google
+
+> OAuth es la vía correcta. **No uses contraseña de Gmail** en variables de entorno.
 
 ---
 

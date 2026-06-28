@@ -2,10 +2,22 @@
 
 Empresario Virtual se conecta a tu **correo principal** mediante credenciales OAuth dedicadas (no comparte contraseña).
 
+> **Cuenta principal:** `lasucursaldelcafe@gmail.com`  
+> **Automatización:** `npm run setup:google-oauth` (abre consola + valida `.env.local`)  
+> **Guía extendida:** `scripts/setup-google-cloud.md`
+
+## Paso 0: Asistente automatizado
+
+```bash
+npm run setup:google-oauth
+```
+
+Abre Google Cloud Console, establece `MAIN_EMAIL` si falta, y lista URIs de redirect para local y Vercel.
+
 ## Paso 1: Crear proyecto en Google Cloud Console
 
 1. Ve a https://console.cloud.google.com/
-2. Crea proyecto: `empresario-virtual`
+2. Crea proyecto: `empresario-virtual` (o usa el existente)
 3. Habilita APIs:
    - Gmail API
    - Google Drive API
@@ -19,6 +31,7 @@ Empresario Virtual se conecta a tu **correo principal** mediante credenciales OA
 4. URIs de redirección autorizados:
    ```
    http://localhost:3000/api/oauth/google/callback
+   https://empresario-virtual.vercel.app/api/oauth/google/callback
    ```
 5. Descarga el JSON → guárdalo como `secrets/google-oauth-client.json` (NO subir a git)
 
@@ -37,7 +50,8 @@ Copia `.env.example` a `.env.local` y completa:
 GOOGLE_CLIENT_ID=tu-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=tu-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/oauth/google/callback
-MAIN_EMAIL=tu-correo@gmail.com
+MAIN_EMAIL=lasucursaldelcafe@gmail.com
+NEXT_PUBLIC_APP_URL=https://empresario-virtual.vercel.app
 ENCRYPTION_KEY=genera-con-openssl-rand-hex-32
 OPENAI_API_KEY=sk-...
 ```
@@ -55,21 +69,30 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 4. Inicia sesión con tu correo principal y acepta permisos
 5. El refresh token se guarda encriptado en la base de datos
 
-## Alternativa: contraseña de aplicación (solo envío SMTP)
+## Sync a Vercel
 
-Si prefieres no usar OAuth para pruebas rápidas:
+Tras completar OAuth en `.env.local`:
+
+```bash
+python launcher/sync_vercel.py
+# o npm run launcher → Sync Vercel env
+```
+
+## Alternativa: contraseña de aplicación (solo fallback manual)
+
+**OAuth es la vía de producción.** Solo usa SMTP si **tú mismo** creas una App Password en Google Account → Seguridad (nunca la pegues en chat ni la commitees):
 
 1. Google Account → Seguridad → Verificación en 2 pasos (activar)
 2. Contraseñas de aplicaciones → Crear "Empresario Virtual"
-3. En `.env.local`:
+3. En `.env.local` (local, gitignored):
    ```env
    SMTP_HOST=smtp.gmail.com
    SMTP_PORT=587
-   SMTP_USER=tu-correo@gmail.com
+   SMTP_USER=lasucursaldelcafe@gmail.com
    SMTP_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
    ```
 
-> OAuth es la opción recomendada para producción (revocable, scopes limitados).
+> OAuth es la opción recomendada (revocable, scopes limitados). Si expusiste tu contraseña de Gmail, cámbiala de inmediato en Google Account.
 
 ## Seguridad
 
