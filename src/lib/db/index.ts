@@ -12,14 +12,14 @@ let dbInstance: DbInstance | null = null;
 let sqliteRaw: Database.Database | null = null;
 let libsqlClient: Client | null = null;
 
-function useTurso(): boolean {
+function isTursoConfigured(): boolean {
   return Boolean(process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN);
 }
 
 function getDb(): DbInstance {
   if (dbInstance) return dbInstance;
 
-  if (useTurso()) {
+  if (isTursoConfigured()) {
     libsqlClient = createClient({
       url: process.env.TURSO_DATABASE_URL!,
       authToken: process.env.TURSO_AUTH_TOKEN!,
@@ -160,7 +160,7 @@ const INIT_SQL = `
 export async function initDatabase() {
   getDb();
 
-  if (useTurso() && libsqlClient) {
+  if (isTursoConfigured() && libsqlClient) {
     await libsqlClient.executeMultiple(INIT_SQL);
   } else if (sqliteRaw) {
     sqliteRaw.exec(INIT_SQL);

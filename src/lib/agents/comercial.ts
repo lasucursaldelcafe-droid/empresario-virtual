@@ -6,7 +6,7 @@ export class ComercialAgent extends BaseAgent {
   readonly name = "Agente Comercial";
   readonly description = "CRM, seguimiento de clientes y oportunidades de venta";
 
-  async execute(context: AgentContext): Promise<AgentOutput> {
+  async execute(_: AgentContext): Promise<AgentOutput> {
     const inactiveClients = await this.memory.getClients(45);
     const alerts: AgentOutput["alerts"] = [];
 

@@ -6,7 +6,7 @@ export class JuridicoAgent extends BaseAgent {
   readonly name = "Agente Jurídico";
   readonly description = "Controla vencimientos legales, contratos y obligaciones laborales";
 
-  async execute(context: AgentContext): Promise<AgentOutput> {
+  async execute(_: AgentContext): Promise<AgentOutput> {
     const upcoming = await this.memory.getUpcomingLegalObligations(30);
     const alerts: AgentOutput["alerts"] = [];
 
