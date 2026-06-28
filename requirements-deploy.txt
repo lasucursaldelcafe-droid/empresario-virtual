@@ -1,0 +1,3 @@
+# Dependencias opcionales para scripts/auto_deploy.py
+# El script funciona solo con la stdlib de Python 3.10+
+# requests>=2.31.0

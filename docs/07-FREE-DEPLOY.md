@@ -14,6 +14,35 @@ Stack gratuito recomendado:
 
 ---
 
+## Automatización (recomendado)
+
+Script Python que conecta Turso + Vercel, sube variables de entorno, despliega a producción y verifica endpoints:
+
+```powershell
+# Requisitos: Python 3.10+ (Windows: py -3), vercel CLI (vercel login), turso CLI opcional
+python scripts/auto_deploy.py
+# Windows si python no esta en PATH:
+py -3 scripts/auto_deploy.py
+
+# O vía npm:
+npm run deploy:auto
+
+# Simular sin cambios:
+python scripts/auto_deploy.py --dry-run
+
+# Solo env vars (sin deploy):
+python scripts/auto_deploy.py --skip-deploy
+
+# Pasar token Turso manualmente:
+python scripts/auto_deploy.py --token eyJhbG...
+```
+
+**Qué automatiza:** genera `ENCRYPTION_KEY` y `SETUP_SECRET`, actualiza `.env.local`, crea token Turso (si `turso` CLI está logueada), sube env vars a Vercel, `vercel deploy --prod`, llama `/api/setup`, `/api/health` y `/api/daily-close`.
+
+**Manual si falta algo:** token Turso si no tienes `turso auth login`, credenciales Google OAuth, y `vercel login` la primera vez.
+
+---
+
 ## Paso 1 — Turso (base de datos, 2 min)
 
 1. Regístrate en https://turso.tech (sin tarjeta)
