@@ -9,6 +9,8 @@
     "lint": "eslint",
     "setup": "node scripts/setup-credentials.js",
     "deploy:auto": "node scripts/run-auto-deploy.cjs",
+    "setup:tokens": "node scripts/run-get-tokens.cjs",
+    "launcher": "node scripts/run-launcher.cjs",
     "db:init": "npx tsx scripts/init-db.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"
