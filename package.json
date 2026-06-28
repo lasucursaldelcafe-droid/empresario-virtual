@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "setup": "node scripts/setup-credentials.js",
-    "deploy:auto": "python scripts/auto_deploy.py",
+    "deploy:auto": "node scripts/run-auto-deploy.cjs",
     "db:init": "npx tsx scripts/init-db.ts",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio"

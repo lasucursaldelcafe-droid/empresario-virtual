@@ -24,7 +24,7 @@ python scripts/auto_deploy.py
 # Windows si python no esta en PATH:
 py -3 scripts/auto_deploy.py
 
-# O vía npm:
+# O vía npm (detecta py/python en Windows y Linux):
 npm run deploy:auto
 
 # Simular sin cambios:
@@ -46,24 +46,21 @@ python scripts/auto_deploy.py --token eyJhbG...
 ## Paso 1 — Turso (base de datos, 2 min)
 
 1. Regístrate en https://turso.tech (sin tarjeta)
-2. Instala CLI (PowerShell):
-
-```powershell
-irm get.tur.so/install.ps1 | iex
-```
-
-3. Login y crea la BD:
-
-```powershell
-turso auth login
-turso db create empresario-virtual --region iad
-turso db show empresario-virtual --url
-turso db tokens create empresario-virtual
-```
-
-Guarda:
-- `TURSO_DATABASE_URL` (libsql://...)
-- `TURSO_AUTH_TOKEN`
+2. Abre tu base de datos **empresario-virtual**
+3. URL ya configurada en Vercel:
+   ```
+   libsql://empresario-virtual-empresario-virtual.aws-us-east-2.turso.io
+   ```
+4. **Falta el token** — en Turso: **Database → Create Token** (Read & Write)
+5. Añade en Vercel → Settings → Environment Variables:
+   ```
+   TURSO_AUTH_TOKEN=tu-token-aqui
+   ```
+   O ejecuta localmente (después de pegar el token en `.env.local`):
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/sync-vercel-env.ps1
+   npx vercel deploy --prod --yes
+   ```
 
 ---
 
